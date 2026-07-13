@@ -5,8 +5,22 @@ Both files share one layout and one set of SMIL animations; only the palette dif
 Pure SVG + SMIL, no JavaScript, GitHub-safe.
 """
 
+import math
 import os
+import re
 from xml.sax.saxutils import escape
+
+# How long the banner stays alive before it settles into a still frame.
+#
+# This is THE performance control. An SVG inside an <img> has no internal layers, so a
+# single running SMIL animation forces the browser to re-rasterise the whole 1180x610
+# document — in software — every frame. Measured at ~93ms per full render, that pins a
+# CPU core for as long as the tab is open, which is what cooks the laptop. No amount of
+# trimming individual effects gets a canvas this size under the ~16ms a 60fps loop needs.
+#
+# So the loops are finite: everything animates for LOOP_SECONDS, then stops and the
+# repaints stop with it. Set to 0 to restore infinite loops (and the fan).
+LOOP_SECONDS = 40
 
 W, H = 1180, 610
 
@@ -129,7 +143,7 @@ PANEL_H = H - 2 * PAD
 
 EPS = 0.01                                     # stand-in for a zero-width clip rect
 CW, FS, LH = 5.8, 9.6, 11.15                   # ASCII cell metrics (66-col portrait)
-PCW, PFS = 6.3, 11.0                           # pill cell metrics
+PCW, PFS = 6.7, 11.0                           # pill cell metrics (~0.6em mono advance)
 
 TX = RIGHT_X + 32                              # terminal text left edge
 TERM_INNER_W = RIGHT_W - 64
@@ -141,6 +155,34 @@ ROLE_START = 1.6
 
 def e(s):
     return escape(str(s))
+
+
+ANIM_RE = re.compile(r'<animate(?:Transform)?\b[^>]*/>')
+DUR_RE = re.compile(r'dur="([\d.]+)s"')
+
+
+def finitize(svg):
+    """Give every indefinitely-repeating animation a finite repeatCount.
+
+    Once the last animation ends the browser stops repainting the image entirely, so
+    steady-state CPU falls to zero. Animations without fill="freeze" revert to their base
+    value, which is deliberately the resting state (scanlines park off-canvas, blobs and
+    particles return to origin, cursors go transparent).
+    """
+    if not LOOP_SECONDS:
+        return svg
+
+    def repl(m):
+        tag = m.group(0)
+        if 'repeatCount="indefinite"' not in tag:
+            return tag
+        d = DUR_RE.search(tag)
+        if not d:
+            return tag
+        n = max(1, math.ceil(LOOP_SECONDS / float(d.group(1))))
+        return tag.replace('repeatCount="indefinite"', f'repeatCount="{n}"')
+
+    return ANIM_RE.sub(repl, svg)
 
 
 def role_keys(i, width):
@@ -235,12 +277,11 @@ def build(p):
       f'<stop offset="0.45" stop-color="{p["glass"]}" stop-opacity="0"/>'
       f'</linearGradient>')
 
-    a(f'<linearGradient id="sheen" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="200" y2="0">'
-      f'<stop offset="0" stop-color="{p["glass"]}" stop-opacity="0"/>'
-      f'<stop offset="0.5" stop-color="{p["glass"]}" stop-opacity="{p["glass_o"] * 1.6:.3f}"/>'
-      f'<stop offset="1" stop-color="{p["glass"]}" stop-opacity="0"/>'
-      f'<animateTransform attributeName="gradientTransform" type="translate" '
-      f'dur="9s" repeatCount="indefinite" values="-260 0; {W + 200} 0"/>'
+    # Static diagonal sheen. Sweeping this across the canvas dirtied all 1180x610 every
+    # frame; the border shimmer already supplies the moving highlight.
+    a(f'<linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0.7">'
+      f'<stop offset="0" stop-color="{p["glass"]}" stop-opacity="{p["glass_o"] * 1.2:.3f}"/>'
+      f'<stop offset="0.45" stop-color="{p["glass"]}" stop-opacity="0"/>'
       f'</linearGradient>')
 
     # scanline band
@@ -261,29 +302,30 @@ def build(p):
           f'<stop offset="1" stop-color="{c}" stop-opacity="0"/>'
           f'</radialGradient>')
 
-    # glows
-    a(f'<filter id="asciiGlow" x="-25%" y="-25%" width="150%" height="150%">'
-      f'<feGaussianBlur stdDeviation="4" result="b"/>'
+    # Glow. A tight filter region matters — blur cost scales with the area it covers.
+    a(f'<filter id="asciiGlow" x="-6%" y="-4%" width="112%" height="108%">'
+      f'<feGaussianBlur stdDeviation="2.6" result="b"/>'
       f'<feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 {p["glow_o"]} 0" result="g"/>'
       f'<feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge>'
       f'</filter>')
 
+    # Hover-only, so it costs nothing until the pointer is actually over a pill.
     a(f'<filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">'
       f'<feGaussianBlur stdDeviation="3" result="b"/>'
       f'<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>'
       f'</filter>')
 
-    a(f'<filter id="blur40" x="-30%" y="-30%" width="160%" height="160%">'
-      f'<feGaussianBlur stdDeviation="40"/></filter>')
-
     a(f'<filter id="cardShadow" x="-10%" y="-10%" width="120%" height="130%">'
-      f'<feDropShadow dx="0" dy="18" stdDeviation="26" flood-color="#000000" '
+      f'<feDropShadow dx="0" dy="14" stdDeviation="14" flood-color="#000000" '
       f'flood-opacity="{p["shadow_o"]}"/></filter>')
 
     a('<filter id="noise" x="0" y="0" width="100%" height="100%">'
-      '<feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/>'
+      '<feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="1" stitchTiles="stitch"/>'
       '<feColorMatrix type="saturate" values="0"/>'
       '</filter>')
+    a('<pattern id="noiseTile" width="128" height="128" patternUnits="userSpaceOnUse">'
+      '<rect width="128" height="128" filter="url(#noise)"/>'
+      '</pattern>')
 
     # clips
     a(f'<clipPath id="card"><rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="24"/></clipPath>')
@@ -292,8 +334,10 @@ def build(p):
     # Per-line typing clips for the ASCII portrait (local coords of the art group).
     # EPS, not 0: WebKit treats a zero-width rect in a <clipPath> as an *empty* clip
     # and renders the referencing element unclipped instead of clipping it away.
+    # Overshoot the reveal width by a glyph: without textLength the advance comes from the
+    # font itself, so CW is an estimate and the last character must not get clipped off.
     for i, line in enumerate(art):
-        end = len(line.rstrip()) * CW
+        end = (len(line.rstrip()) + 1.5) * CW
         y = i * LH - FS
         a(f'<clipPath id="al{i}"><rect x="0" y="{y:.1f}" width="{EPS}" height="{LH:.1f}">'
           f'<animate attributeName="width" from="{EPS}" to="{end:.1f}" dur="0.42s" '
@@ -315,25 +359,28 @@ def build(p):
     a("</defs>")
 
     # ---------------------------------------------------------- background --
-    a(f'<g filter="url(#cardShadow)">'
-      f'<rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="24" fill="{p["bg"]}"/></g>')
+    # Flat fill, no drop shadow: feDropShadow blurred a ~1400x790 alpha mask every frame
+    # for a halo that GitHub's own page background mostly swallowed anyway.
+    a(f'<rect x="1" y="1" width="{W - 2}" height="{H - 2}" rx="24" fill="{p["bg"]}"/>')
 
     a('<g clip-path="url(#card)">')
 
-    # floating radial glows
+    # Floating radial glows. NO blur filter here: the radial gradients already fade to
+    # zero opacity, so a Gaussian blur added nothing visible — but because these ellipses
+    # animate, it forced a full stdDeviation=40 blur recompute over a huge area every
+    # single frame. That was the main reason the SVG pinned a CPU core.
     for i, (cx, cy, r, dx, dy, dur) in enumerate([
         (210, 130, 340, 26, 18, 17),
         (900, 470, 400, -30, -22, 21),
         (660, 90, 300, 18, 26, 14),
     ]):
-        a(f'<g filter="url(#blur40)">'
-          f'<ellipse cx="{cx}" cy="{cy}" rx="{r}" ry="{r * 0.8:.0f}" fill="url(#blob{i})">'
+        a(f'<ellipse cx="{cx}" cy="{cy}" rx="{r}" ry="{r * 0.8:.0f}" fill="url(#blob{i})">'
           f'<animateTransform attributeName="transform" type="translate" dur="{dur}s" '
           f'repeatCount="indefinite" values="0 0; {dx} {dy}; {-dx} {dy // 2}; 0 0"/>'
-          f'</ellipse></g>')
+          f'</ellipse>')
 
     # animated particles
-    for i in range(14):
+    for i in range(8):
         px = 60 + (i * 83) % (W - 120)
         py = 70 + (i * 137) % (H - 140)
         r = 1.0 + (i % 3) * 0.6
@@ -346,8 +393,7 @@ def build(p):
           f'values="0;0.5;0.15;0" keyTimes="0;0.3;0.7;1"/>'
           f'</circle>')
 
-    # noise texture
-    a(f'<rect x="0" y="0" width="{W}" height="{H}" filter="url(#noise)" opacity="{p["noise_o"]}"/>')
+    # (noise is drawn later, as an overlay on the panels — see below)
 
     # global scanline sweep
     a(f'<rect x="0" y="-80" width="{W}" height="80" fill="url(#scanGrad)">'
@@ -362,16 +408,22 @@ def build(p):
       f'fill="none" stroke="{p["border"]}"/>')
 
     a('<g clip-path="url(#leftClip)">')
-    a(f'<g transform="translate({art_x:.1f} {art_y:.1f})" filter="url(#asciiGlow)">')
+
+    # The float lives on an ancestor of the filtered node, so the browser can cache the
+    # blurred layer and merely translate it, instead of re-running the filter each frame.
+    a(f'<g transform="translate({art_x:.1f} {art_y:.1f})">')
     a('<animateTransform attributeName="transform" type="translate" additive="sum" '
       'dur="8s" repeatCount="indefinite" values="0 0; 0 -4; 0 2; 0 0"/>')
 
+    # NO textLength/lengthAdjust here. It forced WebKit onto a per-glyph spacing path that
+    # cost ~110ms per paint for this 34x66 block — the single biggest expense in the whole
+    # banner, and pointless: the font is monospace, so the columns already line up.
+    a(f'<g filter="url(#asciiGlow)">')
     for i, line in enumerate(art):
-        y = i * LH
-        a(f'<text x="0" y="{y:.1f}" clip-path="url(#al{i})" xml:space="preserve" '
-          f'font-family="{MONO}" font-size="{FS}" letter-spacing="0" '
-          f'textLength="{len(line) * CW:.1f}" lengthAdjust="spacing" '
+        a(f'<text x="0" y="{i * LH:.1f}" clip-path="url(#al{i})" xml:space="preserve" '
+          f'font-family="{MONO}" font-size="{FS}" '
           f'fill="url(#asciiGrad)">{e(line)}</text>')
+    a("</g>")
 
     # per-line typing cursor
     for i, line in enumerate(art):
@@ -449,11 +501,19 @@ def build(p):
         rw = len(role) * 9.6
         kt, vals = role_keys(i, rw)
         vs = ";".join(f"{v:.1f}" for v in vals)
+        # When the finite loop ends the width would revert to 0 and the line would go
+        # blank, so the first role is pinned open as the resting frame.
+        pin = ""
+        if i == 0 and LOOP_SECONDS:
+            cycles = max(1, math.ceil(LOOP_SECONDS / ROLE_CYCLE))
+            settle = ROLE_START + cycles * ROLE_CYCLE
+            pin = (f'<set attributeName="width" to="{rw:.1f}" '
+                   f'begin="{settle:.1f}s" fill="freeze"/>')
         a(f'<svg x="{role_x}" y="{PANEL_Y + 172}" width="0" height="26" overflow="hidden">'
           f'<animate attributeName="width" dur="{ROLE_CYCLE}s" begin="{ROLE_START}s" '
-          f'repeatCount="indefinite" values="{vs}" keyTimes="{kt}"/>'
-          f'<text x="0" y="18" font-family="{MONO}" font-size="16" textLength="{rw:.1f}" '
-          f'lengthAdjust="spacing" fill="{p["text"]}">{e(role)}</text></svg>')
+          f'repeatCount="indefinite" values="{vs}" keyTimes="{kt}"/>{pin}'
+          f'<text x="0" y="18" font-family="{MONO}" font-size="16" '
+          f'fill="{p["text"]}">{e(role)}</text></svg>')
 
     # role cursor: outer group gates visibility per slot, inner rect blinks
     for i, role in enumerate(ROLES):
@@ -508,12 +568,9 @@ def build(p):
         a(f'<g class="pill" opacity="0">'
           f'<animate attributeName="opacity" from="0" to="1" dur="0.45s" begin="{b:.2f}s" fill="freeze"/>'
           f'<rect class="pb" x="{cx:.1f}" y="{cy}" width="{pw:.1f}" height="{ph}" rx="{ph / 2}" '
-          f'fill="{p["pill_bg"]}" stroke="url(#accent)" stroke-opacity="0.35">'
-          f'<animate attributeName="stroke-opacity" values="0.28;0.6;0.28" dur="{4 + (i % 4)}s" '
-          f'begin="{b:.2f}s" repeatCount="indefinite"/></rect>'
+          f'fill="{p["pill_bg"]}" stroke="url(#accent)" stroke-opacity="0.4"/>'
           f'<text x="{cx + pw / 2:.1f}" y="{cy + 17}" text-anchor="middle" font-family="{MONO}" '
-          f'font-size="{PFS}" textLength="{tw:.1f}" lengthAdjust="spacing" '
-          f'fill="{p["text"]}" fill-opacity="0.88">{e(s)}</text>'
+          f'font-size="{PFS}" fill="{p["text"]}" fill-opacity="0.88">{e(s)}</text>'
           f'</g>')
         cx += pw + gap
 
@@ -570,8 +627,15 @@ def build(p):
       f'<animate attributeName="opacity" from="0" to="0.8" dur="0.6s" begin="4.8s" fill="freeze"/>'
       f'd-m-g &#183; dmitrii-gorovoi &#183; dm_g__</text>')
 
-    # glass sheen + shimmer over everything
-    a(f'<rect x="0" y="0" width="{W}" height="{H}" fill="url(#sheen)" opacity="0.5"/>')
+    # Noise texture, tiled from a 128x128 feTurbulence pattern rather than running the
+    # turbulence across the whole canvas. Even tiled, compositing it costs real time per
+    # frame, so it is confined to the two panels rather than the full 1180x610 card.
+    for x, wd in ((LEFT_X, LEFT_W), (RIGHT_X, RIGHT_W)):
+        a(f'<rect x="{x}" y="{PANEL_Y}" width="{wd}" height="{PANEL_H}" rx="18" '
+          f'fill="url(#noiseTile)" opacity="{p["noise_o"]}"/>')
+
+    # No full-canvas sheen rect: another 1180x610 gradient pass, ~16ms/frame, for a
+    # highlight the per-panel glass gradient already provides.
     a("</g>")  # card clip
 
     a(f'<rect x="1.5" y="1.5" width="{W - 3}" height="{H - 3}" rx="23" fill="none" '
@@ -588,7 +652,7 @@ def main():
     for pal in (DARK, LIGHT):
         path = os.path.join(root, f'{pal["name"]}.svg')
         with open(path, "w", encoding="utf-8") as f:
-            f.write(build(pal))
+            f.write(finitize(build(pal)))
         print(f'wrote {path} ({os.path.getsize(path)} bytes)')
 
 
