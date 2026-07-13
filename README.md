@@ -21,5 +21,3 @@ Second-year BSc student in **Mathematics & Computer Science** at the **Universit
 - **Email** — [gorovoi.dmitrii@gmail.com](mailto:gorovoi.dmitrii@gmail.com)
 - **LinkedIn** — [dmitrii-gorovoi](https://www.linkedin.com/in/dmitrii-gorovoi)
 - **Instagram** — [@dm_g__](https://instagram.com/dm_g__)
-
-<sub>The banner is pure SVG + SMIL — no JavaScript. The ASCII portrait is generated from a photo with <code>swift tools/photo_to_ascii.swift &lt;photo&gt; 66 0.52 &gt; tools/portrait.txt</code>, then the banner is rebuilt with <code>python3 tools/generate_hero.py</code>.</sub>
