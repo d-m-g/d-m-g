@@ -8,7 +8,7 @@
 
 ### 🔭 Currently
 
-Second-year BSc student in **Mathematics & Computer Science** at the **University of Helsinki**, focused on **mobile development** and **AI/ML**. Building iOS apps in Swift/SwiftUI, shipping cross-platform wrappers with Capacitor.js, and training models with scikit-learn.
+Third-year BSc student in **Mathematics & Computer Science** at the **University of Helsinki**, focused on **mobile development** and **AI/ML**. Building iOS apps in Swift/SwiftUI, shipping cross-platform wrappers with Capacitor.js, and training models with scikit-learn.
 
 ### 🛠️ Stack
 
