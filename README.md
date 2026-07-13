@@ -12,8 +12,8 @@ Second-year BSc student in **Mathematics & Computer Science** at the **Universit
 
 ### 🛠️ Stack
 
-**Languages** — Swift · Python · C++ · JavaScript \n
-**Frameworks** — SwiftUI · React · Capacitor.js · scikit-learn · NumPy · Pandas \n
+**Languages** — Swift · Python · C++ · JavaScript  
+**Frameworks** — SwiftUI · React · Capacitor.js · scikit-learn · NumPy · Pandas 
 **Tools** — SQL · Git · Linux
 
 ### 📫 Reach me
