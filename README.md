@@ -18,6 +18,7 @@ Third-year BSc student in **Mathematics & Computer Science** at the **University
 
 ### 📫 Reach me
 
+- **Website** — [d-m-g.dev](https://d-m-g.dev)
 - **Email** — [gorovoi.dmitrii@gmail.com](mailto:gorovoi.dmitrii@gmail.com)
 - **LinkedIn** — [dmitrii-gorovoi](https://www.linkedin.com/in/dmitrii-gorovoi)
 - **Instagram** — [@dm_g__](https://instagram.com/dm_g__)

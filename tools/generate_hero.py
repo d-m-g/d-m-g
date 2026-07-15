@@ -43,7 +43,7 @@ INFO = [
     ("Location", "Helsinki, Finland"),
     ("Education", "BSc Mathematics & CS, University of Helsinki"),
     ("Focus", "Mobile Development / AI"),
-    ("Portfolio", "github.com/d-m-g"),
+    ("Website", "d-m-g.dev"),
     ("Email", "gorovoi.dmitrii@gmail.com"),
 ]
 
@@ -625,7 +625,7 @@ def build(p):
     a(f'<text x="{TX + 4 * 42 + 14}" y="{iy + 22}" font-family="{MONO}" font-size="11.5" '
       f'fill="{p["muted"]}" opacity="0">'
       f'<animate attributeName="opacity" from="0" to="0.8" dur="0.6s" begin="4.8s" fill="freeze"/>'
-      f'd-m-g &#183; dmitrii-gorovoi &#183; dm_g__</text>')
+      f'd-m-g &#183; dmitrii-gorovoi &#183; dm_g__ &#183; d-m-g.dev</text>')
 
     # Noise texture, tiled from a 128x128 feTurbulence pattern rather than running the
     # turbulence across the whole canvas. Even tiled, compositing it costs real time per
